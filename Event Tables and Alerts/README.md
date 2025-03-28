@@ -1,100 +1,170 @@
-# Realtime Data Analytics Pipeline with Kinesis, Lambda, DynamoDB & Python
+# Snowflake Event Tables & Alerts - Data Pipeline Project
 
 ## Overview
-This project demonstrates how to develop a real-time streaming data pipeline using **AWS services** and **Python**. The pipeline efficiently processes IoT, energy, and AI workflow data using event-driven architectures.
+This project demonstrates a real-world use case for using **event tables** and **alerts** in Snowflake. The data pipeline processes JSON data from an untrusted source, parsing valid records while handling bad data through a **Dead Letter Queue (DLQ)** mechanism. An alert system is integrated to notify users via email when bad records are detected.
 
+### Key Features:
+- **JSON Data Processing**: Parses incoming JSON data using Python.
+- **Dead Letter Queue (DLQ)**: Identifies and logs invalid records.
+- **Event Tables**: Stores bad records for monitoring and analysis.
+- **Automated Alerts**: Sends email notifications when bad data is detected.
+- **Task Scheduling**: Automates data transformation workflows.
 
-## **Architecture**
+## Prerequisites
+Before setting up this project, ensure you have:
+- A **Snowflake Account** (Sign up at [Snowflake](https://www.snowflake.com/))
+- Familiarity with **SQL** and **Python**
+- Access to Snowflake's **Task and Alert** features
 
-![Project Architecture](Project_Architecture.png)
+## What You Will Learn
+By completing this project, you will learn:
+- How to log and monitor bad records using **event tables**.
+- How to create and schedule **tasks** for automated data transformation.
+- How to set up **alerts** to detect and notify users of issues in data pipelines.
 
-1. **Data Ingestion:** IoT and AI workflow data are ingested into **AWS Kinesis Data Streams**.
-2. **Real-Time Processing:** AWS **Lambda** functions process and transform the data.
-3. **Data Storage:** Processed data is stored in **DynamoDB** for quick lookups and in **S3/Redshift** for analytics.
-4. **Analytics & Visualization:** AWS services like **Redshift** and **Athena** enable querying and reporting.
+## Project Architecture
+1. **Data Ingestion**: JSON records are received from an external source.
+2. **Data Processing (Python & SQL)**: Valid records are parsed and stored in a **Snowflake table**.
+3. **Error Handling (DLQ)**: Invalid records are stored separately in an **event table**.
+4. **Automated Alerts**: An alert is triggered when bad data exceeds a threshold.
+5. **Task Scheduling**: A Snowflake task automates the pipeline workflow.
 
+---
 
+## Step 1: Setting Up Snowflake Environment
 
-### **Technologies Used**
-- **AWS Kinesis Data Streams** - For real-time data ingestion.
-- **AWS Lambda** - For serverless data transformation.
-- **AWS DynamoDB** - For scalable data storage.
-- **AWS S3 & Redshift** - For optimized data retrieval and analytics.
-- **Docker** - For containerized execution of Python scripts.
-- **Python** - For data processing and ETL scripting.
-
-## **Project Goals**
-- 🚀 Build a real-time **data pipeline** for processing IoT, energy, and AI workflow data.
-- 📊 Optimize **data storage & retrieval** using AWS DynamoDB, S3, and Redshift.
-- 🔄 Implement **event-driven architectures** using AWS Kinesis.
-- 🔧 Develop **ETL pipelines** to ingest, transform, and structure large energy datasets.
-
-
-## **Setup Instructions**
-### **1. Clone the Repository**
-```sh
- git clone https://github.com/your-repo/realtime-data-analytics.git
- cd realtime-data-analytics
+### 1.1 Create a Snowflake Database and Schema
+```sql
+CREATE DATABASE event_logging;
+CREATE SCHEMA data_pipeline;
 ```
 
-### **2. Configure AWS Credentials**
-Ensure you have the AWS CLI configured:
-```sh
- aws configure
-```
-Set up your `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_REGION`.
-
-### **3. Create Kinesis Stream**
-```sh
-aws kinesis create-stream --stream-name kinesis-stream-1 --shard-count 1
+### 1.2 Create the Main Data Table
+```sql
+CREATE TABLE data_pipeline.valid_records (
+    id INT,
+    event_time TIMESTAMP,
+    data VARIANT
+);
 ```
 
-![Amazon_Kinesis](Amazon_Kinesis.png)
-
-
-### **4. Deploy Lambda Function**
-```sh
-cd lambda/
-zip function.zip lambda_function.py
-aws lambda create-function --function-name ProcessKinesisData \
-  --runtime python3.8 --role <IAM_ROLE_ARN> --handler lambda_function.lambda_handler \
-  --zip-file fileb://function.zip --timeout 30
+### 1.3 Create an Event Table for Bad Records
+```sql
+CREATE TABLE data_pipeline.bad_records (
+    id INT,
+    event_time TIMESTAMP,
+    error_message STRING,
+    raw_data STRING
+);
 ```
 
-![Amazon_Lambda_Kinesis](kinesis-data-streams-to-dynamodb.png)
-
-
-### **5. Connect Kinesis to Lambda**
-```sh
-aws lambda create-event-source-mapping --event-source-arn <Kinesis ARN> \
-  --function-name ProcessKinesisData --starting-position LATEST
+### 1.4 Create an Alert for Bad Data
+```sql
+CREATE ALERT data_pipeline.bad_data_alert
+WAREHOUSE = my_warehouse
+SCHEDULE = '1 MINUTE'
+IF (SELECT COUNT(*) FROM data_pipeline.bad_records WHERE event_time > DATEADD(MINUTE, -1, CURRENT_TIMESTAMP)) > 10
+THEN
+  CALL SYSTEM$SEND_EMAIL(
+      'admin@example.com',
+      'Bad Data Alert',
+      'More than 10 bad records detected in the last minute.'
+  );
 ```
 
-### **6. Store Data in DynamoDB**
-Create a DynamoDB table:
-```sh
-aws dynamodb create-table --table-name SensorData \
-  --attribute-definitions AttributeName=id,AttributeType=S \
-  --key-schema AttributeName=id,KeyType=HASH \
-  --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5
+---
+
+## Step 2: Python Script for Data Processing
+Use the following **Python script** to process incoming JSON data.
+
+### 2.1 Install Dependencies
+```bash
+pip install snowflake-connector-python
 ```
 
-![DynamoDB](DynamoDB.png)
+### 2.2 Python Code for Data Processing
+```python
+import snowflake.connector
+import json
 
+# Connect to Snowflake
+conn = snowflake.connector.connect(
+    user='your_username',
+    password='your_password',
+    account='your_account'
+)
+cur = conn.cursor()
 
-### **7. Run Python Producer**
-A sample producer script to send IoT data to Kinesis:
-```sh
-python producer.py
+# Sample JSON data
+json_data = '[{"id": 1, "event_time": "2025-03-26T12:00:00", "data": "valid"}, {"id": 2, "event_time": "2025-03-26T12:05:00", "data": "invalid"}]'
+
+data_list = json.loads(json_data)
+
+for record in data_list:
+    try:
+        # Validate JSON format
+        if "id" in record and "event_time" in record and "data" in record:
+            cur.execute(f"""
+                INSERT INTO data_pipeline.valid_records (id, event_time, data)
+                VALUES ({record['id']}, '{record['event_time']}', '{record['data']}')
+            """)
+        else:
+            raise ValueError("Invalid JSON structure")
+    except Exception as e:
+        cur.execute(f"""
+            INSERT INTO data_pipeline.bad_records (id, event_time, error_message, raw_data)
+            VALUES ({record.get('id', 'NULL')}, CURRENT_TIMESTAMP, '{str(e)}', '{json.dumps(record)}')
+        """)
+
+conn.commit()
+cur.close()
+conn.close()
 ```
 
-## **Future Enhancements**
-✅ Add **real-time dashboards** using AWS QuickSight.  
-✅ Improve **fault tolerance** with AWS SQS & SNS for notifications.  
-✅ Implement **machine learning models** for anomaly detection in IoT data.  
+---
 
-## **Contributing**
-Feel free to contribute by submitting **issues** or **pull requests**! 🚀
+## Step 3: Automate Data Processing with Snowflake Tasks
 
-## **License**
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+### 3.1 Create a Snowflake Task
+```sql
+CREATE OR REPLACE TASK data_pipeline.process_data_task
+WAREHOUSE = my_warehouse
+SCHEDULE = 'USING CRON 0 * * * * UTC'
+AS
+CALL data_pipeline.process_data();
+```
+
+### 3.2 Enable the Task
+```sql
+ALTER TASK data_pipeline.process_data_task RESUME;
+```
+
+---
+
+## Step 4: Testing the Pipeline
+- **Insert sample data** and check if valid records go into `valid_records` while bad records go into `bad_records`.
+- **Trigger the alert** by inserting multiple bad records.
+- **Monitor the event tables** for bad data logs.
+
+## Step 5: Deployment & Monitoring
+- Deploy the Python script on a cloud service (AWS Lambda, Google Cloud Functions, etc.).
+- Use **Snowflake's built-in monitoring tools** to track pipeline performance.
+
+## Conclusion
+This project provides a **robust data pipeline** to process, monitor, and alert on bad data in Snowflake. By following these steps, you ensure **data integrity** and **automate issue detection** for real-time processing.
+
+---
+
+## Contribution
+Feel free to fork this repository, suggest improvements, or contribute by adding new features!
+
+## License
+This project is licensed under the MIT License.
+
+## Contact
+For any queries, reach out via [your_email@example.com].
+
+---
+
+### 🌟 **If you found this useful, give it a ⭐ on GitHub!**
+
