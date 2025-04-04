@@ -227,3 +227,96 @@ On the Verify Agent Connection screen select Generate file to download the Agent
 
 
 
+## 5. Agent Configuration
+Overview
+During this section, you will configure the Agent that will operate alongside our Source Databases.
+
+Configure the Agents
+The first step is to create the agent-postgresql directory. In this directory, you will create 2 directories named agent-keys and configuration.
+
+Creating Configuration Files
+You will fill the configuration files for each agent to operate correctly. The configuration files include snowflake.json file to connect to Snowflake, datasources.json file to connect to the Source Databases, and postgresql.conf file with additional Agent Environment Variables.
+
+Here's how the file structure should look like in the beginning:
+
+Directory Structure
+
+agent-postgresql
+agent-keys
+configuration
+datasources.json
+postgresql.conf
+snowflake.json
+docker-compose.yaml
+Navigate to the directory called agent-postgresql
+Create the docker-compose file named docker-compose.yaml in the agent-postgresql directory with the following content:
+
+
+```bash
+
+services:
+  postgresql-agent:
+    container_name: postgresql-agent
+    image: snowflakedb/database-connector-agent:latest
+    volumes:
+      - ./agent-keys:/home/agent/.ssh
+      - ./configuration/snowflake.json:/home/agent/snowflake.json
+      - ./configuration/datasources.json:/home/agent/datasources.json
+    env_file:
+      - configuration/postgresql.conf
+    mem_limit: 6g
+
+```
+
+
+Put the previously downloaded snowflake.json file in the configuration directory folder
+Create the file named datasources.json in the configuration directory with the following content:
+
+```bash
+{
+  "PSQLDS1": {
+    "url": "jdbc:postgresql://host.docker.internal:5432/postgres",
+    "username": "postgres",
+    "password": "postgres",
+    "publication": "agent_postgres_publication",
+    "ssl": false
+  }
+}
+```
+
+Create the file named postgresql.conf in the configuration directory with the following content:
+
+```bash
+JAVA_OPTS=-Xmx5g
+```
+Navigating to the agent-postgresql directory in your terminal, start the agent using the following command. The agent should generate public/private key for authorization to Snowflake.
+
+
+```bash
+docker-compose up -d
+```
+
+After running the docker-compose up -d command, you will see in your file structure that the agent-keys directory has been populated with the private and public keys. At the end, your directory structure should resemble the following.
+
+Directory Structure
+
+agent-postgresql
+agent-keys
+database-connector-agent-app-private-key.p8
+database-connector-agent-app-public-key.pub
+configuration
+datasources.json
+postgresql.conf
+snowflake.json
+docker-compose.yaml
+Verifying Connection with Snowflake
+Navigate to Snowsight to your previously created Snowflake Connector for PostgreSQL Native App. Click on the Refresh button in the Agent Connection Section. When successfully configured, you should see the "Successfully configured" message. Click "Define data to sync".
+
+![image](https://github.com/user-attachments/assets/acc22dfc-005e-4f7f-abc4-73dd0d47f738)
+
+
+
+
+
+
+
