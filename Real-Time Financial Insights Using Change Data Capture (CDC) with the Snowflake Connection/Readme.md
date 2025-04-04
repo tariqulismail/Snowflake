@@ -299,7 +299,7 @@ docker-compose up -d
 After running the docker-compose up -d command, you will see in your file structure that the agent-keys directory has been populated with the private and public keys. At the end, your directory structure should resemble the following.
 
 Directory Structure
-
+```bash
 agent-postgresql
 agent-keys
 database-connector-agent-app-private-key.p8
@@ -309,14 +309,148 @@ datasources.json
 postgresql.conf
 snowflake.json
 docker-compose.yaml
+```
 Verifying Connection with Snowflake
 Navigate to Snowsight to your previously created Snowflake Connector for PostgreSQL Native App. Click on the Refresh button in the Agent Connection Section. When successfully configured, you should see the "Successfully configured" message. Click "Define data to sync".
 
 ![image](https://github.com/user-attachments/assets/acc22dfc-005e-4f7f-abc4-73dd0d47f738)
 
 
+## 6. Replication Process
+Overview
+In this step, we will instruct the Connector to begin replicating the selected tables.
+
+Configure Data Ingestion
+Change the role to ACCOUNTADMIN
+Download the Snowflake Notebook and import it into Snowflake by navigating to Snowsight and going to Notebooks and to using the Import .ipynb file button.
+Select the CDC_PROD for the database, ANALYTICS for the schema, and CDC_DS_WH for the warehouse. This Notebook includes the SQL scripts needed to create the destination database for table replication of the PostgreSQL tables into Snowflake and monitor the replication process.
+Run the first 3 cells in the Notebook labeled create_db_objects, table_replication, and check_replication_state.
+Run the cell labeled check_replication_state until the output indicates successful replication as indicated in the Notebook.
+Once the replication process is complete, you can run the rest of the Notebook.
+Notice the Dynamic Table, cdc_prod.analytics.customer_purchase_summary, is created in the last cell labeled create_dynamic_table. This table will be used to visualize the data in the Customer Spending Dashboard Streamlit app.
 
 
+## 7. Streamlit App
+Overview
+In this section, we will create a Streamlit in Snowflake application to visualize the customer purchase summary data.
 
+Create the Streamlit in Snowflake Application
+Change the role to ACCOUNTADMIN
+Navigate to Snowsight and go to Projects then Streamlit
+Click on the + Streamlit App to create a new Streamlit application
+For the App Title, enter Customer Spending Dashboard
+For the App location, enter CDC_PROD for the database and ANALYTICS for the schema
+For the App warehouse, choose the CDC_DS_WH warehouse and click Create
+Copy and paste the contents of the customer_purchase_summary.py file into the Streamlit app code editor
+Here, we can view the purchase summary for all or selected customers by selecting various filter for dates, customer IDs, and product categories and more
+
+## 8. CDC
+Overview
+In this section, we will ingest new transaction data from PostgreSQL into Snowflake.
+
+Ingest New Data
+Navigate to your PostgreSQL console and run the following SQL command to create a stored procedure that inserts 1000 new records into the transactions table every minute:
+
+```bash
+CREATE OR REPLACE PROCEDURE insert_transactions()
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_new_transaction_id TEXT;
+    v_customer_id INT;
+    v_product_id INT;
+    v_merchant_id INT;
+    v_transaction_date DATE;
+    v_transaction_time TEXT;
+    v_quantity INT;
+    v_product_price DOUBLE PRECISION;
+    v_total_price DOUBLE PRECISION;
+    v_existing_customer RECORD;
+    v_existing_product RECORD;
+    v_existing_merchant RECORD;
+    v_transaction_card TEXT;
+    v_transaction_category TEXT;
+BEGIN
+    -- Loop for 30 minutes (inserting 1000 records every minute)
+    FOR i IN 1..30 LOOP
+        FOR j IN 1..1000 LOOP
+            -- Select random valid customer, product, and merchant from existing tables
+            SELECT * INTO v_existing_customer
+            FROM postgres.raw_cdc.customers
+            ORDER BY RANDOM()
+            LIMIT 1;
+
+            SELECT * INTO v_existing_product
+            FROM postgres.raw_cdc.products
+            ORDER BY RANDOM()
+            LIMIT 1;
+
+            SELECT * INTO v_existing_merchant
+            FROM postgres.raw_cdc.merchants
+            ORDER BY RANDOM()
+            LIMIT 1;
+
+            -- Generate new transaction ID (unique)
+            v_new_transaction_id := 'TX' || EXTRACT(EPOCH FROM NOW())::TEXT || j::TEXT;
+
+            -- Generate current date and time in New York time zone
+            v_transaction_date := (CURRENT_TIMESTAMP AT TIME ZONE 'America/New_York')::DATE;
+            v_transaction_time := TO_CHAR(CURRENT_TIMESTAMP AT TIME ZONE 'America/New_York', 'HH24:MI:SS');
+
+            -- Generate random quantity between 1 and 7
+            v_quantity := FLOOR(RANDOM() * 7 + 1);
+
+            -- Get product price and calculate total price
+            v_product_price := v_existing_product.price;
+            v_total_price := v_product_price * v_quantity;
+
+            v_transaction_card := (ARRAY['American Express', 'Visa', 'Mastercard', 'Discover'])[FLOOR(RANDOM() * 4 + 1)];
+            v_transaction_category := CASE WHEN RANDOM() < 0.8 THEN 'Purchase' ELSE 'Refund' END;
+
+            -- Insert new transaction into the transactions table
+            INSERT INTO postgres.raw_cdc.transactions (
+                transaction_id, customer_id, product_id, merchant_id, transaction_date, transaction_time, quantity, total_price, transaction_card, transaction_category
+            )
+            VALUES (
+                v_new_transaction_id, v_existing_customer.customer_id, v_existing_product.product_id,
+                v_existing_merchant.merchant_id, v_transaction_date, v_transaction_time,
+                v_quantity, v_total_price, v_transaction_card, v_transaction_category
+            );
+        END LOOP;
+
+        -- Commit after every batch of 1000 rows
+        COMMIT;
+
+        -- Wait for 30 seconds before inserting the next batch
+        PERFORM pg_sleep(30);
+    END LOOP;
+END;
+$$;
+```
+
+
+To run the stored procedure, execute the following SQL command:
+
+```bash
+CALL insert_transactions();
+```
+Navigate to the Streamlit dashboard and refresh the page by clicking on Refresh to view the new data.
+
+
+## 9. Clean Up
+Overview
+When you're finished with this Quickstart, you can clean up the objects created in Snowflake.
+
+Clean Up Script
+Navigate to the last cell in the Snowflake Notebook to uncomment and run the last cell labeled clean_up to drop the connector objects created in this Quickstart.
+
+
+## 10. Conclusion and Resources
+Congrats! You're reached the end of this Quickstart!
+What You Learned
+With the completion of this Quickstart, you have now delved into:
+
+How to connect PostgreSQL data to Snowflake using the Snowflake Connector for PostgreSQL
+Visualize data using Dynamic Tables and display visualizations within Streamlit in Snowflake (SiS)
 
 
