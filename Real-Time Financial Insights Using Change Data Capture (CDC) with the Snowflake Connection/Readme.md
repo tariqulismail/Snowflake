@@ -195,3 +195,35 @@ SELECT * FROM postgres.raw_cdc.merchants;
 SELECT * FROM postgres.raw_cdc.products;
 SELECT * FROM postgres.raw_cdc.transactions;
 ```
+
+
+## 4. Snowflake Connector
+Overview
+During this step, you will install and configure the Snowflake Connector for PostgreSQL Native App to capture changes made to the PostgreSQL database tables.
+
+Install the Snowflake Connector for PostgreSQL Native App
+Navigate to Snowsight:
+
+Navigate to the Data Products then to the Marketplace section
+Search for the Snowflake Connector for PostgreSQL Native App and install the application
+You should find your installed Native App under Data Products, Apps section
+Configure the Snowflake Connector for PostgreSQL Native App
+On your Snowflake Account, navigate to the Data Products, Apps section
+Open the application
+Select Mark all as done as we will create our source databases from scratch.
+
+![image](https://github.com/user-attachments/assets/811ce8c5-2b4c-43e7-8d16-7123a04e7c75)
+
+Click Start configuration
+If you have Event Tables already activated in your account, the Event Log Database, Event Log Schema, and Event Table will populate automatically with what is active. The names of the Event Log Database, Event Log Schema, and Event Table could be slightly different from what is shown.
+On the Configure Connector screen, select Configure
+
+![image](https://github.com/user-attachments/assets/c188e07e-8d08-43d3-a994-f408db0d2020)
+
+
+On the Verify Agent Connection screen select Generate file to download the Agent Configuration file. The downloaded file name should resemble snowflake.json. Save this file for use during the Agent configuration section.
+
+![image](https://github.com/user-attachments/assets/14864d7c-9472-44d9-ba66-a265bd94f2f1)
+
+
+
