@@ -156,10 +156,17 @@ CREATE TABLE postgres.raw_cdc.transactions (
 );
 ```
 Download and save these csv files in a directory on your local machine:
-customers.csv
-merchants.csv
-products.csv
-transactions.csv
+
+[customers.csv](https://github.com/Snowflake-Labs/sfguide-intro-to-cdc-using-snowflake-postgres-connector-dynamic-tables/blob/main/scripts/postgres_csv/customers.csv)
+
+[merchants.csv](https://github.com/Snowflake-Labs/sfguide-intro-to-cdc-using-snowflake-postgres-connector-dynamic-tables/blob/main/scripts/postgres_csv/merchants.csv)
+
+[products.csv](https://github.com/Snowflake-Labs/sfguide-intro-to-cdc-using-snowflake-postgres-connector-dynamic-tables/blob/main/scripts/postgres_csv/products.csv)
+
+[transactions.csv](https://github.com/Snowflake-Labs/sfguide-intro-to-cdc-using-snowflake-postgres-connector-dynamic-tables/blob/main/scripts/postgres_csv/customers.csv)
+
+
+
 We'll need to move the files from the local computer to the Docker container before loading the data into the PostgreSQL database.
 Navigate to your terminal to get the Docker container ID with this command:
 ```bash
