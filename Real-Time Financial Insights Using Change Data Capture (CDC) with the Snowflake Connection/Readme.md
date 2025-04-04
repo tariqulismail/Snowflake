@@ -59,3 +59,132 @@ USE WAREHOUSE cdc_ds_wh;
 /*---------------------------*/
 SELECT 'cdc sql is now complete' AS note;
 ```
+
+
+## 3. PostgreSQL Environment
+Overview
+In this section, we will set up a PostgreSQL database and create tables to simulate a financial company's customer transactional data.
+
+Starting the Database Instance
+Before getting started with this step, make sure that you have Docker Desktop installed for either Mac, Windows, or Linux. Ensure that you have Docker Compose installed on your machine.
+
+To initiate the PostgreSQL database using Docker, you'll need to create a file called docker-compose.yaml. This file will contain the configuration for the PostgreSQL database. If you have another container client, spin up the container and use the PostgreSQL image below.
+Open the IDE of your choice to copy and paste this file by copy and pasting the following:
+
+```bash
+services:
+  postgres:
+    image: "postgres:17"
+    container_name: "postgres17"
+    environment:
+      POSTGRES_DB: 'postgres'
+      POSTGRES_USER: 'postgres'
+      POSTGRES_PASSWORD: 'postgres'
+    ports:
+      - "5432:5432"
+    command:
+      - "postgres"
+      - "-c"
+      - "wal_level=logical"
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+```
+
+Open a terminal and navigate to the directory where the docker-compose.yaml file is located. Run the following command to start the PostgreSQL database:
+```bash
+docker-compose up -d
+```
+After running this command, you should see one Docker container actively running the source database.
+
+Connecting to the Database
+To connect to the pre-configured databases using Visual Studio Code or PyCharm, or whichever IDE you choose for a database connection, perform the following steps with the provided credentials:
+
+Open your tool of choice for connecting to the PostgreSQL database
+For VSCode, you can use the PostgreSQL extension
+For PyCharm, you can use the Database Tools and SQL plugin
+Click the + sign or similar to add data source
+Use these connection parameters:
+User: postgres
+Password: postgres
+URL: jdbc:postgresql://localhost:5432/
+Test the connection and save
+Loading Data
+Run the following postgres script in the PostgreSQL to create the database, schema, and tables:
+
+```bash
+CREATE SCHEMA raw_cdc;
+SET search_path TO raw_cdc;
+
+DROP TABLE IF EXISTS postgres.raw_cdc.customers;
+DROP TABLE IF EXISTS postgres.raw_cdc.merchants;
+DROP TABLE IF EXISTS postgres.raw_cdc.products;
+DROP TABLE IF EXISTS postgres.raw_cdc.transactions;
+
+CREATE TABLE postgres.raw_cdc.customers (
+   customer_id INTEGER PRIMARY KEY,
+   firstname VARCHAR,
+   lastname VARCHAR,
+   age INTEGER,
+   email VARCHAR,
+   phone_number VARCHAR
+);
+
+CREATE TABLE postgres.raw_cdc.merchants (
+   merchant_id integer PRIMARY KEY,
+   merchant_name VARCHAR,
+   merchant_category VARCHAR
+);
+
+CREATE TABLE postgres.raw_cdc.products (
+   product_id INTEGER PRIMARY KEY,
+   product_name VARCHAR,
+   product_category VARCHAR,
+   price DOUBLE PRECISION
+);
+
+CREATE TABLE postgres.raw_cdc.transactions (
+   transaction_id VARCHAR PRIMARY KEY,
+   customer_id INTEGER,
+   product_id INTEGER,
+   merchant_id INTEGER,
+   transaction_date DATE,
+   transaction_time VARCHAR,
+   quantity INTEGER,
+   total_price DOUBLE PRECISION,
+   transaction_card VARCHAR,
+   transaction_category VARCHAR
+);
+```
+Download and save these csv files in a directory on your local machine:
+customers.csv
+merchants.csv
+products.csv
+transactions.csv
+We'll need to move the files from the local computer to the Docker container before loading the data into the PostgreSQL database.
+Navigate to your terminal to get the Docker container ID with this command:
+```bash
+docker ps
+```
+To copy the CSV files to the container, run these commands in your terminal, replacing the file path with your actual file path,m and replacing container_id with your actual container ID from the previous command:
+```bash
+docker cp /Users/your_username/Downloads/customers.csv container_id:/tmp/customers.csv
+docker cp /Users/your_username/Downloads/merchants.csv container_id:/tmp/merchants.csv
+docker cp /Users/your_username/Downloads/products.csv container_id:/tmp/products.csv
+docker cp /Users/your_username/Downloads/transactions.csv container_id:/tmp/transactions.csv
+```
+Back in your PostgreSQL console, run these SQL commands to load the files from the container to the PostgreSQL tables:
+COPY postgres.raw_cdc.customers FROM '/tmp/customers.csv' DELIMITER ',' CSV HEADER;
+COPY postgres.raw_cdc.merchants FROM '/tmp/merchants.csv' DELIMITER ',' CSV HEADER;
+COPY postgres.raw_cdc.products FROM '/tmp/products.csv' DELIMITER ',' CSV HEADER;
+COPY postgres.raw_cdc.transactions FROM '/tmp/transactions.csv' DELIMITER ',' CSV HEADER;
+Next, make sure to run the CREATE PUBLICATION command to enable the logical replication for the tables in the raw_cdc schema. This will allow the Snowflake Connector for PostgreSQL to capture the changes made to the tables in the PostgreSQL database:
+```bash
+CREATE PUBLICATION agent_postgres_publication FOR ALL TABLES;
+```
+Lastly, check that the tables have been loaded correctly by running the following SQL commands:
+```bash
+SELECT * FROM postgres.raw_cdc.customers;
+SELECT * FROM postgres.raw_cdc.merchants;
+SELECT * FROM postgres.raw_cdc.products;
+SELECT * FROM postgres.raw_cdc.transactions;
+```
